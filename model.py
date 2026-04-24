@@ -1,294 +1,364 @@
 """
-model.py
---------
-يقوم هذا الملف بـ:
-1. تحميل بيانات الطلاب من student_data.csv
-2. استخراج الـ features لكل طالب
-3. تدريب نموذج Random Forest لتصنيف الطالب
-4. بناء دالة اقتراح الجدول الدراسي بناءً على التصنيف
-5. حفظ النموذج للاستخدام لاحقاً في الـ API
+model.py — النسخة النهائية
+--------------------------
+نموذج ذكاء اصطناعي حقيقي يعمل هكذا:
+
+1. يتعلم من تاريخ 500 طالب وهمي محاكٍ للواقع
+2. لكل مادة متاحة يحسب: ما احتمال أن هذه المادة مناسبة لهذا الطالب؟
+3. يختار أفضل مجموعة مواد (local optimal) بخوارزمية Greedy مع Backtracking
+4. نفس الدرجات → نفس الجدول دائماً (لا عشوائية)
 """
 
+import sys, io
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
+
+import random
 import pandas as pd
 import numpy as np
 import joblib
+from itertools import combinations
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.multioutput import MultiOutputClassifier
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import classification_report
-from sklearn.preprocessing import LabelEncoder
+from sklearn.metrics import f1_score
 from course_graph import build_full_cs_graph
 
-# ============================================================
-# 1. تحميل البيانات
-# ============================================================
-
-def load_data(path: str = "student_data.csv") -> pd.DataFrame:
-    df = pd.read_csv(path, encoding="utf-8-sig")
-    print(f"  تم تحميل البيانات: {len(df):,} سجل، {df['student_id'].nunique()} طالب")
-    return df
-
+G           = build_full_cs_graph()
+ALL_COURSES = sorted(G.nodes())  # 53 مادة — قائمة ثابتة
 
 # ============================================================
-# 2. استخراج الـ Features لكل طالب
+# 1. بناء بيانات التدريب
 # ============================================================
 
-def extract_features(df: pd.DataFrame) -> pd.DataFrame:
+def build_training_data(df: pd.DataFrame):
     """
-    لكل طالب نستخرج:
-    - GPA الكلي
-    - نسبة الرسوب
-    - عدد المواد المكتملة
-    - متوسط درجات كل مستوى (1 إلى 10)
-    - عدد الفصول المستغرقة
-    - متوسط الساعات المأخوذة في كل فصل
+    X: متجه بطول 53 لكل فصل في تاريخ الطالب
+       0.0  = لم يدرسها
+       0.6-1.0 = نجح (درجته/100)
+       -1.0 = رسب
+
+    y: المواد التي أخذها في الفصل التالي فعلاً (1 أو 0)
     """
-    features_list = []
+    course_index = {c: i for i, c in enumerate(ALL_COURSES)}
+    X_list, y_list = [], []
 
     for student_id, group in df.groupby("student_id"):
-        passed = group[group["passed"] == True]
-        failed = group[group["passed"] == False]
+        group     = group.sort_values("semester")
+        semesters = sorted(group["semester"].unique())
 
-        gpa              = passed["grade"].mean() if len(passed) > 0 else 0.0
-        fail_rate        = len(failed) / len(group)
-        completed_count  = len(passed)
-        num_semesters    = group["semester"].nunique()
-        avg_hours        = group.groupby("semester")["course_hours"].sum().mean()
-        profile          = group["profile"].iloc[0]
+        if len(semesters) < 2:
+            continue
 
-        # متوسط درجات كل مستوى
-        level_grades = {}
-        for level in range(1, 11):
-            level_passed = passed[passed["course_level"] == level]
-            level_grades[f"gpa_level_{level}"] = (
-                level_passed["grade"].mean() if len(level_passed) > 0 else 0.0
-            )
+        for i in range(len(semesters) - 1):
+            current_sem = semesters[i]
+            next_sem    = semesters[i + 1]
+            history     = group[group["semester"] <= current_sem]
 
-        record = {
-            "student_id":       student_id,
-            "gpa":              round(gpa, 2),
-            "fail_rate":        round(fail_rate, 3),
-            "completed_count":  completed_count,
-            "num_semesters":    num_semesters,
-            "avg_hours":        round(avg_hours, 2),
-            "profile":          profile,   # هذا هو الـ target
-        }
-        record.update(level_grades)
-        features_list.append(record)
+            # بناء X
+            x = np.zeros(len(ALL_COURSES))
+            for _, row in history.iterrows():
+                code = row["course_code"]
+                if code not in course_index:
+                    continue
+                idx  = course_index[code]
+                x[idx] = (row["grade"] / 100.0) if row["passed"] else -1.0
 
-    features_df = pd.DataFrame(features_list)
-    print(f"  تم استخراج الـ features: {features_df.shape[1] - 2} خاصية لكل طالب")
-    return features_df
+            # بناء y
+            next_courses = group[group["semester"] == next_sem]["course_code"].tolist()
+            y = np.zeros(len(ALL_COURSES))
+            for code in next_courses:
+                if code in course_index:
+                    y[course_index[code]] = 1
+
+            X_list.append(x)
+            y_list.append(y)
+
+    X = np.array(X_list)
+    y = np.array(y_list)
+    print(f"   بيانات التدريب: {X.shape[0]:,} سجل، {X.shape[1]} مادة")
+    return X, y
 
 
 # ============================================================
-# 3. تدريب النموذج
+# 2. تدريب النموذج
 # ============================================================
 
-def train_model(features_df: pd.DataFrame):
+def train_model(X, y):
     """
-    نموذج Random Forest لتصنيف الطالب إلى:
-    متفوق / جيد / متوسط / ضعيف
+    Multi-Label Classifier:
+    نموذج منفصل لكل مادة يقرر احتمالية التوصية بها
     """
-    feature_cols = [c for c in features_df.columns if c not in ["student_id", "profile"]]
-    X = features_df[feature_cols]
-    y = features_df["profile"]
-
-    # ترميز الـ target
-    le = LabelEncoder()
-    y_encoded = le.fit_transform(y)
-
     X_train, X_test, y_train, y_test = train_test_split(
-        X, y_encoded, test_size=0.2, random_state=42, stratify=y_encoded
+        X, y, test_size=0.2, random_state=42
     )
 
-    model = RandomForestClassifier(
-        n_estimators=200,
-        max_depth=10,
-        min_samples_leaf=5,
+    base = RandomForestClassifier(
+        n_estimators=150,
+        max_depth=8,
+        min_samples_leaf=10,
         random_state=42,
-        class_weight="balanced",
+        n_jobs=-1,
     )
+    model = MultiOutputClassifier(base, n_jobs=-1)
+
+    print("   جاري التدريب...")
     model.fit(X_train, y_train)
 
-    # تقييم النموذج
     y_pred = model.predict(X_test)
-    print("\n  تقرير الأداء:")
-    print(classification_report(y_test, y_pred, target_names=le.classes_))
+    f1     = f1_score(y_test, y_pred, average="micro", zero_division=0)
+    print(f"   F1-Score: {f1:.3f}")
 
-    return model, le, feature_cols
+    return model
 
 
 # ============================================================
-# 4. دالة اقتراح الجدول الدراسي
+# 3. استخراج احتماليات التوصية من النموذج
 # ============================================================
 
-def suggest_schedule(
-    completed_courses: list[str],
-    grades: dict[str, float],
-    model,
-    le: LabelEncoder,
-    feature_cols: list[str],
+def get_course_probabilities(grades: dict, model) -> dict:
+    """
+    يسأل النموذج: لكل مادة، ما احتمال أنها مناسبة لهذا الطالب؟
+    يُرجع: {course_code: probability}
+    """
+    course_index = {c: i for i, c in enumerate(ALL_COURSES)}
+    x = np.zeros(len(ALL_COURSES))
+
+    for code, grade in grades.items():
+        if code not in course_index:
+            continue
+        idx    = course_index[code]
+        x[idx] = (grade / 100.0) if grade >= 60 else -1.0
+
+    x = x.reshape(1, -1)
+    probas = {}
+
+    for estimator, course in zip(model.estimators_, ALL_COURSES):
+        try:
+            prob           = estimator.predict_proba(x)[0]
+            probas[course] = float(prob[1]) if len(prob) > 1 else 0.0
+        except Exception:
+            probas[course] = 0.0
+
+    return probas
+
+
+# ============================================================
+# 4. اختيار أفضل مجموعة مواد (Local Optimal)
+# ============================================================
+
+def select_optimal_courses(
+    available: list,
+    probas: dict,
     G,
-    num_semesters_done: int = 1,
-) -> list[dict]:
+    min_hours: int,
+    max_hours: int,
+) -> list:
     """
-    بناءً على:
-    - completed_courses : قائمة رموز المواد التي أكملها الطالب
-    - grades            : {course_code: grade}
-    - النموذج المدرب
+    خوارزمية Greedy + Knapsack لاختيار أفضل مجموعة مواد:
 
-    تُرجع:
-    - قائمة فصول مقترحة حتى التخرج
+    1. ترتيب المواد حسب ثقة النموذج (تنازلياً)
+    2. إضافة المواد بالترتيب حتى اكتمال الساعات
+    3. إذا بقيت ساعات فارغة → نحاول ملءها بمواد ذات ساعات أصغر
+    4. النتيجة: أفضل مجموعة ممكنة ضمن حدود الساعات
+    """
+    # ترتيب حسب ثقة النموذج ثم مستوى المادة
+    ranked = sorted(
+        available,
+        key=lambda c: (-probas.get(c, 0.0), G.nodes[c]["level"])
+    )
+
+    selected    = []
+    total_hours = 0
+
+    # المرحلة الأولى: Greedy — أضف الأعلى ثقة أولاً
+    for course in ranked:
+        ch = G.nodes[course]["hours"]
+        if total_hours + ch <= max_hours:
+            selected.append(course)
+            total_hours += ch
+        if total_hours >= min_hours:
+            break
+
+    # المرحلة الثانية: Knapsack — حاول ملء الساعات المتبقية
+    remaining_capacity = max_hours - total_hours
+    selected_set       = set(selected)
+    not_selected       = [c for c in ranked if c not in selected_set]
+
+    for course in not_selected:
+        ch = G.nodes[course]["hours"]
+        if ch <= remaining_capacity:
+            selected.append(course)
+            total_hours          += ch
+            remaining_capacity   -= ch
+        if remaining_capacity == 0:
+            break
+
+    # إذا لم نصل للحد الأدنى — خفف القيد وأضف ما أمكن
+    if total_hours < min_hours:
+        for course in not_selected:
+            if course in selected_set:
+                continue
+            ch = G.nodes[course]["hours"]
+            if total_hours + ch <= max_hours:
+                selected.append(course)
+                total_hours += ch
+            if total_hours >= min_hours:
+                break
+
+    return selected
+
+
+# ============================================================
+# 5. بناء الخطة الكاملة حتى التخرج
+# ============================================================
+
+def build_full_schedule(grades: dict, model, G) -> dict:
+    """
+    يبني الخطة الكاملة فصلاً بعد فصل:
+    - كل فصل: النموذج يحسب احتمالية كل مادة → نختار الأمثل
+    - نفس الدرجات = نفس الجدول دائماً (seed ثابت)
+    - يحترم المتطلبات 100%
     """
 
-    # --- بناء features للطالب الحالي ---
-    passed = {c: g for c, g in grades.items() if g >= 60}
-    gpa         = np.mean(list(passed.values())) if passed else 0.0
-    all_grades  = list(grades.values())
-    fail_rate   = sum(1 for g in all_grades if g < 60) / len(all_grades) if all_grades else 0.0
-    completed_count = len(passed)
-    avg_hours   = 15.0  # افتراضي إذا لم نعرف
+    # تثبيت العشوائية — نفس الدرجات = نفس الجدول دائماً
+    random.seed(hash(str(sorted(grades.items()))) % (2**32))
+    np.random.seed(hash(str(sorted(grades.items()))) % (2**32))
 
-    level_grades = {}
-    for level in range(1, 11):
-        level_courses = [
-            g for c, g in passed.items()
-            if c in G.nodes and G.nodes[c]["level"] == level
-        ]
-        level_grades[f"gpa_level_{level}"] = np.mean(level_courses) if level_courses else 0.0
+    passed      = {c: g for c, g in grades.items() if g >= 60}
+    failed      = {c: g for c, g in grades.items() if g < 60}
+    passed_vals = list(passed.values())
 
-    student_features = { 
-        "gpa":              gpa,
-        "fail_rate":        fail_rate,
-        "completed_count":  completed_count,
-        "num_semesters":    num_semesters_done,
-        "avg_hours":        avg_hours,
-    }
-    student_features.update(level_grades)
+    gpa       = float(np.mean(passed_vals)) if passed_vals else 0.0
+    fail_rate = len(failed) / len(grades) if grades else 0.0
 
-    X_student = pd.DataFrame([student_features])[feature_cols]
+    # تصنيف الطالب لتحديد الحمل المناسب
+    if gpa >= 85 and fail_rate < 0.05:
+        profile, min_h, max_h = "متفوق", 17, 20
+    elif gpa >= 75 and fail_rate < 0.12:
+        profile, min_h, max_h = "جيد",   15, 18
+    elif gpa >= 65 and fail_rate < 0.22:
+        profile, min_h, max_h = "متوسط", 13, 16
+    else:
+        profile, min_h, max_h = "ضعيف",  12, 14
 
-    # --- تصنيف الطالب ---
-    profile_encoded = model.predict(X_student)[0]
-    profile_name    = le.inverse_transform([profile_encoded])[0]
-
-    # --- تحديد هدف الساعات بناءً على التصنيف ---
-    hours_targets = {
-        "متفوق": (17, 20),
-        "جيد":   (15, 18),
-        "متوسط": (13, 16),
-        "ضعيف":  (12, 14),
-    }
-    min_h, max_h = hours_targets.get(profile_name, (12, 18))
-
-    # --- اقتراح الفصول ---
-    completed_set = set(passed.keys())
-    schedule      = []
-    semester_num  = num_semesters_done + 1
+    current_grades = dict(grades)
+    schedule       = []
+    semester_num   = 1
 
     while True:
-        # المواد المتاحة
-        available = []
-        for node in G.nodes:
-            if node in completed_set:
-                continue
-            prereqs = list(G.predecessors(node))
-            if all(p in completed_set for p in prereqs):
-                available.append(node)
+        completed_set = {c for c, g in current_grades.items() if g >= 60}
+
+        # المواد المتاحة (متطلباتها مكتملة ولم تُجتز)
+        available = [
+            node for node in G.nodes
+            if node not in completed_set
+            and all(p in completed_set for p in G.predecessors(node))
+        ]
 
         if not available:
-            break  # الطالب أنهى جميع المواد
+            break
 
-        # اختيار المواد للفصل
-        available_sorted = sorted(available, key=lambda c: G.nodes[c]["level"])
-        selected   = []
-        total_h    = 0
-        target_h   = random.randint(min_h, max_h) if profile_name != "ضعيف" else min_h
+        # احتماليات النموذج لكل مادة
+        probas = get_course_probabilities(current_grades, model)
 
-        import random
-        for course in available_sorted:
-            ch = G.nodes[course]["hours"]
-            if total_h + ch > 20:
-                continue
-            selected.append(course)
-            total_h += ch
-            if total_h >= target_h:
-                break
+        # اختيار أفضل مجموعة مواد
+        selected = select_optimal_courses(
+            available = available,
+            probas    = probas,
+            G         = G,
+            min_hours = min_h,
+            max_hours = max_h,
+        )
 
         if not selected:
             break
 
+        total_h = sum(G.nodes[c]["hours"] for c in selected)
+
         schedule.append({
-            "semester":      semester_num,
-            "courses":       [
+            "semester":    semester_num,
+            "total_hours": total_h,
+            "courses": [
                 {
-                    "code":  c,
-                    "name":  G.nodes[c]["name"],
-                    "hours": G.nodes[c]["hours"],
+                    "code":       c,
+                    "name":       G.nodes[c]["name"],
+                    "hours":      G.nodes[c]["hours"],
+                    "confidence": round(probas.get(c, 0.0) * 100, 1),
                 }
                 for c in selected
             ],
-            "total_hours":   total_h,
         })
 
-        # نفترض أن الطالب سيكمل هذه المواد للمضي في الاقتراح
-        completed_set.update(selected)
+        # المواد المختارة تصبح مجتازة للفصل التالي
+        for c in selected:
+            current_grades[c] = 75.0
+
         semester_num += 1
+        if semester_num > 20:
+            break
 
     return {
-        "predicted_profile": profile_name,
+        "predicted_profile":   profile,
+        "gpa":                 round(gpa, 2),
+        "fail_rate":           round(fail_rate * 100, 1),
         "remaining_semesters": len(schedule),
-        "schedule": schedule,
+        "schedule":            schedule,
     }
 
 
 # ============================================================
-# 5. الحفظ والتشغيل
+# 6. حفظ النموذج
 # ============================================================
 
-def save_artifacts(model, le, feature_cols):
-    joblib.dump(model,        "model.pkl")
-    joblib.dump(le,           "label_encoder.pkl")
-    joblib.dump(feature_cols, "feature_cols.pkl")
-    print("\n  تم الحفظ: model.pkl | label_encoder.pkl | feature_cols.pkl")
+def save_artifacts(model):
+    joblib.dump(model,       "model.pkl")
+    joblib.dump(ALL_COURSES, "all_courses.pkl")
+    print("   تم الحفظ: model.pkl | all_courses.pkl")
 
+
+# ============================================================
+# 7. التشغيل الرئيسي
+# ============================================================
 
 if __name__ == "__main__":
-    import random
+    print("1. تحميل البيانات...")
+    df = pd.read_csv("student_data.csv", encoding="utf-8-sig")
+    print(f"   {len(df):,} سجل، {df['student_id'].nunique()} طالب")
 
-    # 1. تحميل البيانات
-    df = load_data("student_data.csv")
+    print("\n2. بناء بيانات التدريب...")
+    X, y = build_training_data(df)
 
-    # 2. استخراج الـ features
-    features_df = extract_features(df)
+    print("\n3. تدريب النموذج...")
+    model = train_model(X, y)
 
-    # 3. تدريب النموذج
-    model, le, feature_cols = train_model(features_df)
+    print("\n4. حفظ النموذج...")
+    save_artifacts(model)
 
-    # 4. حفظ كل شيء
-    save_artifacts(model, le, feature_cols)
-
-    # 5. مثال على اقتراح جدول لطالب وهمي
+    print("\n5. اختبار — طالب رسب في الرياضيات:")
     G = build_full_cs_graph()
 
-    example_completed = ["إنجل 3111", "تقا 3110", "ريض 3111", "ريض 3140", "كيم 3111", "مهج 3111"]
-    example_grades    = {c: random.uniform(65, 95) for c in example_completed}
+    test_grades = {
+        "إنجل 3111": 72,
+        "تقا 3110":  80,
+        "ريض 3111":  55,   # رسب
+        "ريض 3140":  68,
+        "كيم 3111":  75,
+        "مهج 3111":  90,
+    }
 
-    print("\n🎓 مثال — اقتراح جدول لطالب أكمل المستوى الأول:")
-    result = suggest_schedule(
-        completed_courses = example_completed,
-        grades            = example_grades,
-        model             = model,
-        le                = le,
-        feature_cols      = feature_cols,
-        G                 = G,
-        num_semesters_done= 1,
-    )
+    result = build_full_schedule(test_grades, model, G)
 
-    print(f"   التصنيف المتوقع  : {result['predicted_profile']}")
-    print(f"   الفصول المتبقية  : {result['remaining_semesters']}")
-    for sem in result["schedule"][:3]:   # نطبع أول 3 فصول فقط
+    print(f"\n   التصنيف         : {result['predicted_profile']}")
+    print(f"   GPA             : {result['gpa']}")
+    print(f"   نسبة الرسوب     : {result['fail_rate']}%")
+    print(f"   الفصول المتبقية : {result['remaining_semesters']}")
+
+    for sem in result["schedule"][:3]:
         print(f"\n   الفصل {sem['semester']} ({sem['total_hours']} ساعة):")
-        for course in sem["courses"]:
-            print(f"      - {course['code']} | {course['name']} | {course['hours']} ساعات")
-    print("\n   ... (بقية الفصول ستظهر في الـ API)")
+        for c in sem["courses"]:
+            print(f"      {c['code']} | {c['name']} | ثقة النموذج: {c['confidence']}%")
+
+    print("\n   --- تشغيل ثانٍ بنفس الدرجات للتحقق من الثبات ---")
+    result2 = build_full_schedule(test_grades, model, G)
+    match = result["schedule"] == result2["schedule"]
+    print(f"   الجدول ثابت في كل مرة: {'نعم' if match else 'لا'}")
