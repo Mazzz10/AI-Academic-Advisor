@@ -1,15 +1,131 @@
 import React, { useState } from 'react';
 import {
   User, Lock, Upload, ChevronRight, GraduationCap,
-  FileText, BarChart3, Users, LogOut, CheckCircle2
+  FileText, BarChart3, Users, LogOut, CheckCircle2, Languages
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import courseDictionary from './plan.json';
+import courseDictionaryEn from './plan.en.json';
 import html2pdf from 'html2pdf.js';
+
+const TEXT = {
+  ar: {
+    appName: 'AI_ADVISOR',
+    logout: 'خروج',
+    switchLang: 'English',
+    loginTitle: 'نظام المرشد الذكي',
+    loginSubtitle: 'الجامعة الإسلامية - كلية علوم الحاسب',
+    namePlaceholder: 'الاسم',
+    idPlaceholder: 'الرقم الجامعي',
+    passPlaceholder: 'كلمة المرور',
+    loginBtn: 'تسجيل الدخول',
+    loginError: 'خطأ في البيانات!',
+    defaultStudentName: 'طالب',
+    advisorDashboard: 'لوحة تحكم المرشد',
+    analyzePlan: 'تحليل الخطة',
+    backToStudents: '← العودة للطلاب',
+    greeting: 'مرحباً،',
+    studentIdLabel: 'الرقم الجامعي:',
+    levelLabel: 'مستوى',
+    uploadNotYet: 'لم يتم رفع ملف بعد',
+    uploadSuccess: 'تم قراءة وتنظيف الملف بنجاح!',
+    uploadReadError: 'خطأ في قراءة الملف.',
+    uploadFirstAlert: 'الرجاء رفع ملف المواد المجتازة أولاً!',
+    serverConnectionError: 'فشل الاتصال بالخادم. تأكد من تشغيل api.py',
+    uploadAcademicRecord: 'رفع السجل الأكاديمي (JSON)',
+    chooseJsonFile: 'اضغط هنا لاختيار ملف JSON',
+    academicRecordAvailable: 'السجل الأكاديمي متوفر',
+    recordContains: 'يحتوي على',
+    studyCourseWord: 'مادة دراسية.',
+    studentAcademicRecord: 'السجل الأكاديمي للطالب',
+    progressApprox: 'نسبة الإنجاز التقريبية',
+    basedOnCourses: 'بناءً على',
+    coursesToGraduate: 'مقرر للتخرج',
+    defaultCourseName: 'مقرر دراسي',
+    generatingPlan: 'جاري التحليل وبناء الخطة...',
+    advisorGenerateBtn: 'تحليل السجل وإصدار التوصيات ✨',
+    studentGenerateBtn: 'توليد الخطة الدراسية المثالية ✨',
+    predictedProfile: 'التصنيف المتوقع:',
+    approxGpa: 'المعدل التقريبي:',
+    remainingSemesters: 'الفصول المتبقية:',
+    exportPdf: 'تصدير كملف PDF',
+    smartSystemAnalysis: '✨ تحليل النظام الذكي:',
+    smartSystemInsight: 'تم بناء الخطة بتوزيع متوازن للساعات. يمكنك تعديل الخطة يدوياً بسحب وإفلات المواد بين الفصول.',
+    unassignedCourses: '📥 المواد المستبعدة',
+    dragBackToSchedule: '(اسحب المادة لإعادتها للجدول)',
+    semesterLabel: 'الفصل',
+    hoursUnit: 'ساعة',
+    hoursUnitPlural: 'ساعات',
+    dragCourseHere: 'اسحب مادة هنا',
+    approvePlanPdf: 'اعتماد الخطة وإصدارها كـ PDF',
+    finishEdit: '✅ إنهاء التعديل',
+    editPlan: '✏️ تعديل الخطة يدوياً',
+    noStudentsNow: 'لا يوجد طلاب حالياً',
+    noStudentsHint: 'الطلاب الذين يقومون برفع سجلاتهم الأكاديمية سيظهرون هنا تلقائياً.',
+    recordUploadedReady: 'تم رفع السجل (جاهز للتحليل)',
+    pdfFilePrefix: 'الخطة_الدراسية'
+  },
+  en: {
+    appName: 'AI_ADVISOR',
+    logout: 'Logout',
+    switchLang: 'العربية',
+    loginTitle: 'Smart Academic Advisor',
+    loginSubtitle: 'Islamic University - Computer Science',
+    namePlaceholder: 'Name',
+    idPlaceholder: 'Student ID',
+    passPlaceholder: 'Password',
+    loginBtn: 'Login',
+    loginError: 'Invalid credentials!',
+    defaultStudentName: 'Student',
+    advisorDashboard: 'Advisor Dashboard',
+    analyzePlan: 'Analyze Plan',
+    backToStudents: '← Back to Students',
+    greeting: 'Welcome,',
+    studentIdLabel: 'Student ID:',
+    levelLabel: 'Level',
+    uploadNotYet: 'No file uploaded yet',
+    uploadSuccess: 'File parsed and cleaned successfully!',
+    uploadReadError: 'Error reading file.',
+    uploadFirstAlert: 'Please upload your passed courses file first!',
+    serverConnectionError: 'Failed to connect to server. Make sure api.py is running.',
+    uploadAcademicRecord: 'Upload Academic Record (JSON)',
+    chooseJsonFile: 'Click here to choose a JSON file',
+    academicRecordAvailable: 'Academic record is available',
+    recordContains: 'Contains',
+    studyCourseWord: 'courses.',
+    studentAcademicRecord: 'Student Academic Record',
+    progressApprox: 'Approximate completion',
+    basedOnCourses: 'Based on',
+    coursesToGraduate: 'courses required to graduate',
+    defaultCourseName: 'Course',
+    generatingPlan: 'Analyzing and building plan...',
+    advisorGenerateBtn: 'Analyze Record & Issue Recommendations ✨',
+    studentGenerateBtn: 'Generate Ideal Study Plan ✨',
+    predictedProfile: 'Predicted profile:',
+    approxGpa: 'Approx. GPA:',
+    remainingSemesters: 'Remaining semesters:',
+    exportPdf: 'Export as PDF',
+    smartSystemAnalysis: '✨ Smart System Analysis:',
+    smartSystemInsight: 'The plan was generated with balanced credit hours. You can edit it manually by drag and drop between semesters.',
+    unassignedCourses: '📥 Unassigned Courses',
+    dragBackToSchedule: '(Drag a course back into the schedule)',
+    semesterLabel: 'Semester',
+    hoursUnit: 'hr',
+    hoursUnitPlural: 'hrs',
+    dragCourseHere: 'Drag a course here',
+    approvePlanPdf: 'Approve Plan & Export PDF',
+    finishEdit: '✅ Finish Editing',
+    editPlan: '✏️ Edit Plan Manually',
+    noStudentsNow: 'No students yet',
+    noStudentsHint: 'Students who upload their academic records will appear here automatically.',
+    recordUploadedReady: 'Record uploaded (ready for analysis)',
+    pdfFilePrefix: 'Academic_Plan'
+  }
+};
 
 // --- المكونات الفرعية ---
 
-const LoginPage = ({ onLogin }) => {
+const LoginPage = ({ onLogin, t }) => {
   const [name, setName] = useState(''); // <-- 1. New state for the student's name
   const [id, setId] = useState('');
   const [pass, setPass] = useState('');
@@ -25,8 +141,8 @@ const LoginPage = ({ onLogin }) => {
           <div className="bg-blue-600 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-blue-200">
             <GraduationCap className="text-white w-10 h-10" />
           </div>
-          <h1 className="text-2xl font-bold text-slate-800">نظام المرشد الذكي</h1>
-          <p className="text-slate-500 text-sm mt-2">الجامعة الإسلامية - كلية علوم الحاسب</p>
+          <h1 className="text-2xl font-bold text-slate-800">{t('loginTitle')}</h1>
+          <p className="text-slate-500 text-sm mt-2">{t('loginSubtitle')}</p>
         </div>
 
         <div className="space-y-4">
@@ -34,7 +150,7 @@ const LoginPage = ({ onLogin }) => {
           <div className="relative">
             <User className="absolute left-3 top-3 text-slate-400 w-5 h-5" />
             <input
-              type="text" placeholder="الاسم"
+              type="text" placeholder={t('namePlaceholder')}
               className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
               onChange={(e) => setName(e.target.value)}
             />
@@ -43,7 +159,7 @@ const LoginPage = ({ onLogin }) => {
           <div className="relative">
             <FileText className="absolute left-3 top-3 text-slate-400 w-5 h-5" />
             <input
-              type="text" placeholder="الرقم الجامعي"
+              type="text" placeholder={t('idPlaceholder')}
               className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
               onChange={(e) => setId(e.target.value)}
             />
@@ -51,7 +167,7 @@ const LoginPage = ({ onLogin }) => {
           <div className="relative">
             <Lock className="absolute left-3 top-3 text-slate-400 w-5 h-5" />
             <input
-              type="password" placeholder="كلمة المرور"
+              type="password" placeholder={t('passPlaceholder')}
               className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
               onChange={(e) => setPass(e.target.value)}
             />
@@ -60,7 +176,7 @@ const LoginPage = ({ onLogin }) => {
             onClick={() => onLogin(id, pass, name)} // <-- 3. Pass the name to the onLogin function
             className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-blue-100 flex items-center justify-center gap-2"
           >
-            تسجيل الدخول <ChevronRight className="w-5 h-5" />
+            {t('loginBtn')} <ChevronRight className="w-5 h-5" />
           </button>
         </div>
       </motion.div>
@@ -69,13 +185,52 @@ const LoginPage = ({ onLogin }) => {
 };;
 
 // Accept the new props
-const StudentDashboard = ({ studentInfo, uploadedGrades, onUpload, isAdvisorView }) => {
+const StudentDashboard = ({ studentInfo, uploadedGrades, onUpload, isAdvisorView, t, lang }) => {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
-  const [uploadStatus, setUploadStatus] = useState("لم يتم رفع ملف بعد");
+  const [uploadStatusKey, setUploadStatusKey] = useState('uploadNotYet');
   // --- NEW STATES FOR EDITING ---
   const [isEditMode, setIsEditMode] = useState(false);
   const [editableSchedule, setEditableSchedule] = useState(null);
+  const isArabic = lang === 'ar';
+
+  const getHoursLabel = (hours) => `${hours} ${hours === 1 ? t('hoursUnit') : t('hoursUnitPlural')}`;
+
+  const getCourseName = (code) => {
+    const rawCode = String(code || '').replace(/\s+/g, ' ').trim();
+    const parts = rawCode.split(' ');
+    const swappedCode = parts.length === 2 ? `${parts[1]} ${parts[0]}` : rawCode;
+
+    const nameMap = isArabic ? courseDictionary : courseDictionaryEn;
+    const fallbackMap = isArabic ? courseDictionaryEn : courseDictionary;
+
+    return (
+      nameMap[rawCode] ||
+      nameMap[swappedCode] ||
+      fallbackMap[rawCode] ||
+      fallbackMap[swappedCode] ||
+      t('defaultCourseName')
+    );
+  };
+
+  const getProfileLabel = (profile) => {
+    if (isArabic) return profile;
+
+    const profileMap = {
+      'متفوق': 'Excellent',
+      'جيد': 'Good',
+      'متوسط': 'Average',
+      'ضعيف': 'At Risk'
+    };
+
+    return profileMap[profile] || profile;
+  };
+
+  const getGpaOutOf5 = (gpaOutOf100) => {
+    const value = Number(gpaOutOf100);
+    if (Number.isNaN(value)) return '0.00';
+    return Math.min(5, Math.max(0, value / 20)).toFixed(2);
+  };
 
   // NEW: State to hold courses that were deleted from the schedule
   const [unassignedCourses, setUnassignedCourses] = useState([]);
@@ -104,10 +259,10 @@ const StudentDashboard = ({ studentInfo, uploadedGrades, onUpload, isAdvisorView
         // Use the passed function to save globally instead of locally
         if (onUpload) {
           onUpload(formattedGrades);
-          setUploadStatus(" تم قراءة وتنظيف الملف بنجاح!");
+          setUploadStatusKey('uploadSuccess');
         }
       } catch (error) {
-        setUploadStatus(" خطأ في قراءة الملف.");
+        setUploadStatusKey('uploadReadError');
       }
     };
     reader.readAsText(file);
@@ -118,7 +273,7 @@ const StudentDashboard = ({ studentInfo, uploadedGrades, onUpload, isAdvisorView
   // 2. دالة الاتصال بالـ FastAPI الخاص بك
   const handleGenerate = async () => {
     if (!uploadedGrades) {
-      alert("الرجاء رفع ملف المواد المجتازة أولاً!");
+      alert(t('uploadFirstAlert'));
       return;
     }
 
@@ -137,7 +292,7 @@ const StudentDashboard = ({ studentInfo, uploadedGrades, onUpload, isAdvisorView
         })
       });
 
-      if (!response.ok) throw new Error("حدث خطأ في الخادم");
+      if (!response.ok) throw new Error('server_error');
 
       const data = await response.json();
 
@@ -148,7 +303,7 @@ const StudentDashboard = ({ studentInfo, uploadedGrades, onUpload, isAdvisorView
 
     } catch (error) {
       console.error(error);
-      alert("فشل الاتصال بالخادم. تأكد من تشغيل api.py");
+      alert(t('serverConnectionError'));
     } finally {
       setLoading(false);
     }
@@ -249,7 +404,7 @@ const StudentDashboard = ({ studentInfo, uploadedGrades, onUpload, isAdvisorView
     // 2. Configure the PDF settings
     const opt = {
       margin: 15,
-      filename: `Academic_Plan_${result.predicted_profile}.pdf`,
+      filename: `${t('pdfFilePrefix')}_${getProfileLabel(result.predicted_profile)}.pdf`,
       image: { type: 'jpeg', quality: 0.98 },
       html2canvas: { scale: 2, useCORS: true }, // scale: 2 makes the text very sharp
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
@@ -272,24 +427,24 @@ const StudentDashboard = ({ studentInfo, uploadedGrades, onUpload, isAdvisorView
       <div className="print:hidden space-y-6"> {/* <--- ADD THIS LINE */}
         <header className="flex justify-between items-center bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
           <div>
-            <h2 className="text-xl font-bold text-slate-800">مرحباً، {studentInfo.name}</h2>
-            <p className="text-slate-500">الرقم الجامعي: {studentInfo.id}</p>
+            <h2 className="text-xl font-bold text-slate-800">{t('greeting')} {studentInfo.name}</h2>
+            <p className="text-slate-500">{t('studentIdLabel')} {studentInfo.id}</p>
           </div>
-          <div className="bg-green-100 text-green-700 px-4 py-2 rounded-full font-bold">مستوى {studentInfo.level}</div>
+          <div className="bg-green-100 text-green-700 px-4 py-2 rounded-full font-bold">{t('levelLabel')} {studentInfo.level}</div>
         </header>
 
         {/* If it's NOT the advisor, show the upload box */}
         {!isAdvisorView && (
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 text-center">
             <h3 className="flex items-center justify-center gap-2 font-bold mb-4 text-slate-700">
-              <Upload className="w-5 h-5 text-blue-500" /> رفع السجل الأكاديمي (JSON)
+              <Upload className="w-5 h-5 text-blue-500" /> {t('uploadAcademicRecord')}
             </h3>
 
             <input type="file" accept=".json" onChange={handleFileUpload} className="hidden" id="file-upload" />
             <label htmlFor="file-upload" className="block border-2 border-dashed border-blue-200 rounded-xl p-8 cursor-pointer hover:bg-blue-50 transition-colors">
               <FileText className="w-12 h-12 text-blue-400 mx-auto mb-3" />
-              <p className="text-slate-600 font-bold">اضغط هنا لاختيار ملف JSON</p>
-              <p className="text-sm text-slate-400 mt-2">{uploadStatus}</p>
+              <p className="text-slate-600 font-bold">{t('chooseJsonFile')}</p>
+              <p className="text-sm text-slate-400 mt-2">{t(uploadStatusKey)}</p>
             </label>
           </div>
         )}
@@ -299,8 +454,8 @@ const StudentDashboard = ({ studentInfo, uploadedGrades, onUpload, isAdvisorView
           <div className="bg-green-50 p-4 rounded-xl border border-green-200 flex items-center gap-3 mb-6">
             <CheckCircle2 className="text-green-600 w-6 h-6" />
             <div>
-              <h4 className="font-bold text-green-800">السجل الأكاديمي متوفر</h4>
-              <p className="text-sm text-green-600">يحتوي على {Object.keys(uploadedGrades).length} مادة دراسية.</p>
+              <h4 className="font-bold text-green-800">{t('academicRecordAvailable')}</h4>
+              <p className="text-sm text-green-600">{t('recordContains')} {Object.keys(uploadedGrades).length} {t('studyCourseWord')}</p>
             </div>
           </div>
         )}
@@ -314,14 +469,14 @@ const StudentDashboard = ({ studentInfo, uploadedGrades, onUpload, isAdvisorView
           >
             <div className="flex justify-between items-end mb-6 border-b border-slate-100 pb-4">
               <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                <BarChart3 className="w-5 h-5 text-blue-600" /> السجل الأكاديمي للطالب
+                <BarChart3 className="w-5 h-5 text-blue-600" /> {t('studentAcademicRecord')}
               </h3>
 
               {/* NEW FEATURE: Degree Progress Tracker */}
               {/* NEW FEATURE: Degree Progress Tracker */}
-              <div className="w-1/3 text-left">
+              <div className={`w-1/3 ${isArabic ? 'text-right' : 'text-left'}`}>
                 <div className="flex justify-between text-xs text-slate-500 mb-1 font-bold">
-                  <span>نسبة الإنجاز التقريبية</span>
+                  <span>{t('progressApprox')}</span>
                   <span className="text-blue-600">{progressPercentage}%</span>
                 </div>
                 <div className="w-full bg-slate-100 rounded-full h-2.5">
@@ -330,7 +485,7 @@ const StudentDashboard = ({ studentInfo, uploadedGrades, onUpload, isAdvisorView
                     style={{ width: `${progressPercentage}%` }}
                   ></div>
                 </div>
-                <p className="text-[10px] text-slate-400 mt-1">بناءً على {TOTAL_COURSES_REQUIRED} مقرر للتخرج</p>
+                <p className="text-[10px] text-slate-400 mt-1">{t('basedOnCourses')} {TOTAL_COURSES_REQUIRED} {t('coursesToGraduate')}</p>
               </div>
             </div>
 
@@ -346,7 +501,7 @@ const StudentDashboard = ({ studentInfo, uploadedGrades, onUpload, isAdvisorView
                 else if (safeGrade.includes('F')) colorClass = 'bg-red-100 text-red-800';
 
                 // Lookup the name, or provide a default fallback
-                const courseName = courseDictionary[code] || "مقرر دراسي";
+                const courseName = getCourseName(code);
 
                 return (
                   <div key={code} className="bg-white p-3.5 rounded-xl border border-slate-200 flex justify-between items-center hover:border-blue-300 hover:shadow-md transition-all duration-200">
@@ -377,10 +532,10 @@ const StudentDashboard = ({ studentInfo, uploadedGrades, onUpload, isAdvisorView
           className={`w-full py-4 text-white font-bold rounded-2xl shadow-xl transition-all ${loading || !uploadedGrades ? 'bg-slate-400 cursor-not-allowed' : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:opacity-90'}`}
         >
           {loading
-            ? "جاري التحليل وبناء الخطة..."
+            ? t('generatingPlan')
             : isAdvisorView
-              ? "تحليل السجل وإصدار التوصيات ✨" // Dynamic text if advisor is viewing
-              : "توليد الخطة الدراسية المثالية ✨"
+              ? t('advisorGenerateBtn') // Dynamic text if advisor is viewing
+              : t('studentGenerateBtn')
           }
         </button>
 
@@ -396,13 +551,13 @@ const StudentDashboard = ({ studentInfo, uploadedGrades, onUpload, isAdvisorView
             }`}>
             <div>
               <p className={`font-bold text-lg ${isAdvisorView ? 'text-white' : 'text-indigo-800'}`}>
-                التصنيف المتوقع:
+                {t('predictedProfile')}
                 <span className={`px-3 py-1 rounded-lg mx-2 text-sm ${isAdvisorView ? 'bg-blue-600 text-white' : 'bg-indigo-200 text-indigo-900'}`}>
-                  {result.predicted_profile}
+                  {getProfileLabel(result.predicted_profile)}
                 </span>
               </p>
               <p className={`text-sm mt-2 ${isAdvisorView ? 'text-slate-400' : 'text-indigo-600'}`}>
-                المعدل التقريبي: {result.gpa} | الفصول المتبقية: {result.remaining_semesters}
+                {t('approxGpa')} {getGpaOutOf5(result.gpa)} | {t('remainingSemesters')} {result.remaining_semesters}
               </p>
             </div>
 
@@ -413,7 +568,7 @@ const StudentDashboard = ({ studentInfo, uploadedGrades, onUpload, isAdvisorView
                 data-html2canvas-ignore="true" /* <--- ADD THIS */
                 className="print:hidden bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 transition-all shadow-md"
               >
-                <FileText className="w-4 h-4" /> تصدير كملف PDF
+                <FileText className="w-4 h-4" /> {t('exportPdf')}
               </button>
             )}
 
@@ -421,9 +576,9 @@ const StudentDashboard = ({ studentInfo, uploadedGrades, onUpload, isAdvisorView
             {isAdvisorView && (
               <div className="bg-slate-800 p-4 rounded-xl text-xs text-slate-300 border border-slate-700 md:max-w-xs w-full print:hidden">
                 <strong className="text-blue-400 flex items-center gap-1 mb-2 text-sm">
-                  ✨ تحليل النظام الذكي:
+                  {t('smartSystemAnalysis')}
                 </strong>
-                تم بناء الخطة بتوزيع متوازن للساعات. يمكنك تعديل الخطة يدوياً بسحب وإفلات المواد بين الفصول.
+                {t('smartSystemInsight')}
               </div>
             )}
           </div>
@@ -437,14 +592,14 @@ const StudentDashboard = ({ studentInfo, uploadedGrades, onUpload, isAdvisorView
               onDrop={handleDropToUnassigned}
             >
               <h4 className="font-bold text-slate-700 mb-3 flex items-center gap-2">
-                📥 المواد المستبعدة
+                {t('unassignedCourses')}
                 <span className="text-xs font-normal text-slate-500">
-                  (اسحب المادة لإعادتها للجدول)
+                  {t('dragBackToSchedule')}
                 </span>
               </h4>
               <div className="flex flex-wrap gap-3">
                 {unassignedCourses.map(c => {
-                  const nameFromDict = courseDictionary ? courseDictionary[c.code] : c.name;
+                  const nameFromDict = getCourseName(c.code);
                   return (
                     <div
                       key={c.code}
@@ -455,7 +610,7 @@ const StudentDashboard = ({ studentInfo, uploadedGrades, onUpload, isAdvisorView
                       <span className="text-slate-400">⋮⋮</span>
                       <div className="flex flex-col">
                         <span className="font-bold text-slate-800 text-sm">{nameFromDict}</span>
-                        <span className="text-xs text-slate-500">{c.code} • {c.hours} ساعات</span>
+                        <span className="text-xs text-slate-500">{c.code} • {getHoursLabel(c.hours)}</span>
                       </div>
                     </div>
                   );
@@ -475,18 +630,18 @@ const StudentDashboard = ({ studentInfo, uploadedGrades, onUpload, isAdvisorView
                   }`}
               >
                 <div className="flex justify-between items-center mb-5 border-b border-slate-100 pb-3">
-                  <h4 className="font-bold text-slate-800 text-lg">الفصل {sem.semester}</h4>
+                  <h4 className="font-bold text-slate-800 text-lg">{t('semesterLabel')} {sem.semester}</h4>
                   <span className={`text-xs font-bold px-3 py-1.5 rounded-lg border ${sem.total_hours > 20 ? 'bg-red-50 text-red-700 border-red-200' :
                     sem.total_hours < 12 ? 'bg-orange-50 text-orange-700 border-orange-200' :
                       'bg-blue-50 text-blue-700 border-blue-100'
                     }`}>
-                    {sem.total_hours} ساعة
+                    {getHoursLabel(sem.total_hours)}
                   </span>
                 </div>
 
                 <ul className="space-y-3 min-h-[50px]">
                   {sem.courses.map(c => {
-                    const nameFromDict = courseDictionary ? courseDictionary[c.code] : c.name;
+                    const nameFromDict = getCourseName(c.code);
                     return (
                       <li
                         key={c.code}
@@ -505,7 +660,7 @@ const StudentDashboard = ({ studentInfo, uploadedGrades, onUpload, isAdvisorView
                             {c.code}
                           </span>
                         </div>
-                        <span className="text-slate-400 text-xs text-left w-full pl-1">{c.hours} ساعات</span>
+                        <span className="text-slate-400 text-xs text-left w-full pl-1">{getHoursLabel(c.hours)}</span>
 
                         {/* Delete Button */}
                         {isEditMode && (
@@ -521,7 +676,7 @@ const StudentDashboard = ({ studentInfo, uploadedGrades, onUpload, isAdvisorView
                   })}
                   {sem.courses.length === 0 && (
                     <div className="text-center text-slate-400 text-xs py-4 border-2 border-dashed border-slate-200 rounded-xl">
-                      اسحب مادة هنا
+                      {t('dragCourseHere')}
                     </div>
                   )}
                 </ul>
@@ -535,7 +690,7 @@ const StudentDashboard = ({ studentInfo, uploadedGrades, onUpload, isAdvisorView
               onClick={handleExportPDF}
               className="flex-1 bg-green-600 hover:bg-green-700 text-white py-4 rounded-xl font-bold transition-all shadow-lg shadow-green-100 flex justify-center items-center gap-2"
             >
-              <CheckCircle2 className="w-5 h-5" /> اعتماد الخطة وإصدارها كـ PDF
+              <CheckCircle2 className="w-5 h-5" /> {t('approvePlanPdf')}
             </button>
 
               <button
@@ -545,7 +700,7 @@ const StudentDashboard = ({ studentInfo, uploadedGrades, onUpload, isAdvisorView
                   : 'bg-white border-slate-200 hover:border-slate-300 text-slate-700'
                   }`}
               >
-                {isEditMode ? '✅ إنهاء التعديل' : '✏️ تعديل الخطة يدوياً'}
+                {isEditMode ? t('finishEdit') : t('editPlan')}
               </button>
             </div>
           )}
@@ -556,7 +711,7 @@ const StudentDashboard = ({ studentInfo, uploadedGrades, onUpload, isAdvisorView
 };
 
 // Accept the allStudentGrades object
-const AdvisorDashboard = ({ onSelectStudent, allStudentGrades, studentProfiles }) => {
+const AdvisorDashboard = ({ onSelectStudent, allStudentGrades, studentProfiles, t }) => {
   // 1. Get ONLY the IDs of students who have uploaded a file
   const uploadedStudentIds = Object.keys(allStudentGrades);
 
@@ -566,15 +721,15 @@ const AdvisorDashboard = ({ onSelectStudent, allStudentGrades, studentProfiles }
   return (
     <div className="p-6 max-w-5xl mx-auto">
       <h2 className="text-2xl font-bold mb-6 flex items-center gap-2">
-        <Users className="text-blue-600" /> لوحة تحكم المرشد
+        <Users className="text-blue-600" /> {t('advisorDashboard')}
       </h2>
 
       {/* Show a message if no one has uploaded yet */}
       {activeStudents.length === 0 ? (
         <div className="bg-white p-12 rounded-2xl shadow-sm border border-slate-100 text-center">
           <FileText className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-          <p className="text-slate-500 font-bold text-lg">لا يوجد طلاب حالياً</p>
-          <p className="text-slate-400 text-sm mt-1">الطلاب الذين يقومون برفع سجلاتهم الأكاديمية سيظهرون هنا تلقائياً.</p>
+          <p className="text-slate-500 font-bold text-lg">{t('noStudentsNow')}</p>
+          <p className="text-slate-400 text-sm mt-1">{t('noStudentsHint')}</p>
         </div>
       ) : (
         <div className="grid gap-4">
@@ -591,15 +746,15 @@ const AdvisorDashboard = ({ onSelectStudent, allStudentGrades, studentProfiles }
                 </div>
                 <div>
                   <h4 className="font-bold text-slate-800">{s.name}</h4>
-                  <p className="text-xs text-slate-500">الرقم الجامعي: {s.id}</p>
+                  <p className="text-xs text-slate-500">{t('studentIdLabel')} {s.id}</p>
 
                   <span className="text-xs text-green-600 font-bold mt-1 flex items-center gap-1">
-                    <CheckCircle2 className="w-3 h-3" /> تم رفع السجل (جاهز للتحليل)
+                    <CheckCircle2 className="w-3 h-3" /> {t('recordUploadedReady')}
                   </span>
                 </div>
               </div>
               <button className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-md transition-colors">
-                تحليل الخطة
+                {t('analyzePlan')}
               </button>
             </motion.div>
           ))}
@@ -613,6 +768,7 @@ const AdvisorDashboard = ({ onSelectStudent, allStudentGrades, studentProfiles }
 
 export default function App() {
   const [view, setView] = useState('login');
+  const [lang, setLang] = useState('ar');
   const [currentUser, setCurrentUser] = useState(null);
   const [selectedStudent, setSelectedStudent] = useState(null);
 
@@ -620,11 +776,14 @@ export default function App() {
   // NEW: State to remember the profiles of students who log in
   const [studentProfiles, setStudentProfiles] = useState({});
 
+  const t = (key) => TEXT[lang][key] || key;
+  const isArabic = lang === 'ar';
+
   const handleLogin = (id, pass, name) => {
     if (pass === '1234') {
       const newProfile = {
         id: id || '000',
-        name: name || 'طالب',
+        name: name || t('defaultStudentName'),
         gpa: 'N/A',
         level: '7'
       };
@@ -637,21 +796,33 @@ export default function App() {
     } else if (id === '222' && pass === '4321') {
       setView('advisor');
     } else {
-      alert('خطأ في البيانات!');
+      alert(t('loginError'));
     }
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 font-sans" dir="rtl">
+    <div className="min-h-screen bg-slate-50 font-sans" dir={isArabic ? 'rtl' : 'ltr'}>
       {view !== 'login' && (
-        <nav className="bg-white border-b border-slate-200 px-6 py-4 flex justify-between items-center print:hidden">          <span className="font-black text-blue-600 text-xl italic">AI_ADVISOR</span>
-          <button onClick={() => setView('login')} className="text-slate-500 flex items-center gap-1 hover:text-red-500 transition-colors">
-            خروج <LogOut className="w-4 h-4" />
-          </button>
+        <nav className="bg-white border-b border-slate-200 px-6 py-4 flex justify-between items-center print:hidden">
+          <span className="font-black text-blue-600 text-xl italic">{t('appName')}</span>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setLang(isArabic ? 'en' : 'ar')}
+              className="text-slate-500 flex items-center gap-1 hover:text-blue-600 transition-colors"
+              title={t('switchLang')}
+              aria-label={t('switchLang')}
+            >
+              <Languages className="w-4 h-4" />
+              <span className="font-bold text-xs">{isArabic ? 'EN' : 'AR'}</span>
+            </button>
+            <button onClick={() => setView('login')} className="text-slate-500 flex items-center gap-1 hover:text-red-500 transition-colors">
+              {t('logout')} <LogOut className="w-4 h-4" />
+            </button>
+          </div>
         </nav>
       )}
 
-      {view === 'login' && <LoginPage onLogin={handleLogin} />}
+      {view === 'login' && <LoginPage onLogin={handleLogin} t={t} />}
 
       {view === 'student' && (
         <StudentDashboard
@@ -659,6 +830,8 @@ export default function App() {
           uploadedGrades={allStudentGrades[currentUser.id]}
           onUpload={(grades) => setAllStudentGrades(prev => ({ ...prev, [currentUser.id]: grades }))}
           isAdvisorView={false}
+          t={t}
+          lang={lang}
         />
       )}
 
@@ -666,17 +839,20 @@ export default function App() {
         <AdvisorDashboard
           onSelectStudent={(s) => setSelectedStudent(s)}
           allStudentGrades={allStudentGrades}
+          t={t}
           studentProfiles={studentProfiles} // Pass the profiles to the advisor
         />
       )}
 
       {selectedStudent && (
         <div className="p-4">
-          <button onClick={() => setSelectedStudent(null)} className="mb-4 text-blue-600 font-bold">← العودة للطلاب</button>
+          <button onClick={() => setSelectedStudent(null)} className="mb-4 text-blue-600 font-bold">{t('backToStudents')}</button>
           <StudentDashboard
             studentInfo={selectedStudent}
             uploadedGrades={allStudentGrades[selectedStudent.id]}
             isAdvisorView={true}
+            t={t}
+            lang={lang}
           />
         </div>
       )}
